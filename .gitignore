@@ -1,0 +1,8 @@
+/.env
+/.qodo
+/.venv
+/__pycache__
+/cleaned_1130000.json
+/ntpc_opendata_tool.egg-info
+/response_1741329995790.json
+/uv.lock

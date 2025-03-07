@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ntpc_opendata_tool"
+version = "0.1.0"
+description = "新北市交通局 OpenData API 查詢工具"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+dependencies = [
+    "mcp[cli]",
+    "requests",
+    "python-dotenv",
+    "typer",
+    "uvicorn",
+    "pandas",
+]
+
+[project.scripts]
+ntpc-opendata = "ntpc_opendata_tool.cli.main:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "isort",
+    "mypy",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+
+[tool.isort]
+profile = "black"
+line_length = 88 
