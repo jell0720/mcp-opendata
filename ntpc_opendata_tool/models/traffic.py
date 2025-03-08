@@ -8,6 +8,57 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class TrafficCamera(BaseModel):
+    """交通監視器模型"""
+    cctv_id: str
+    district: str
+    areacode: str
+    address: str
+    
+    class Config:
+        populate_by_name = True
+
+
+class ETagLocation(BaseModel):
+    """ETag 設備位置模型"""
+    etag_id: str
+    district: str
+    areacode: str
+    address: str
+    
+    class Config:
+        populate_by_name = True
+
+
+class HeightLimit(BaseModel):
+    """交通限高資訊模型"""
+    county: str
+    countycode: Optional[str] = None
+    area: str
+    areacode: Optional[str] = None
+    road1: str
+    road2: Optional[str] = None
+    latitude: str
+    longitude: str
+    sign_number: str
+    sign_name: str
+    master_name: str
+    second_name: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True
+
+
+class TrafficImpactAssessment(BaseModel):
+    """交通影響評估模型"""
+    name: str
+    category: str
+    url: str
+    
+    class Config:
+        populate_by_name = True
+
+
 class TrafficStatus(BaseModel):
     """交通狀況模型"""
     status_id: str = Field(..., alias="statusId")
@@ -40,41 +91,6 @@ class ConstructionInfo(BaseModel):
         populate_by_name = True
 
 
-class ParkingLot(BaseModel):
-    """停車場資訊模型"""
-    parking_id: str = Field(..., alias="parkingId")
-    name: str
-    area: str
-    address: Optional[str] = None
-    type: str  # 如「路邊停車」、「立體停車場」等
-    total_spaces: int = Field(..., alias="totalSpaces")
-    available_spaces: Optional[int] = Field(None, alias="availableSpaces")
-    fee_description: Optional[str] = Field(None, alias="feeDescription")
-    open_hours: Optional[str] = Field(None, alias="openHours")
-    longitude: Optional[float] = None
-    latitude: Optional[float] = None
-    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
-    
-    class Config:
-        populate_by_name = True
-
-
-class TrafficCamera(BaseModel):
-    """交通攝影機模型"""
-    camera_id: str = Field(..., alias="cameraId")
-    road: str
-    area: str
-    direction: Optional[str] = None
-    image_url: Optional[str] = Field(None, alias="imageUrl")
-    video_url: Optional[str] = Field(None, alias="videoUrl")
-    longitude: float
-    latitude: float
-    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
-    
-    class Config:
-        populate_by_name = True
-
-
 class TrafficIncident(BaseModel):
     """交通事件模型"""
     incident_id: str = Field(..., alias="incidentId")
@@ -92,6 +108,54 @@ class TrafficIncident(BaseModel):
     
     class Config:
         populate_by_name = True
+
+
+def parse_traffic_cameras(data: List[Dict[str, Any]]) -> List[TrafficCamera]:
+    """解析交通監視器資料
+    
+    Args:
+        data: API 回應的原始資料
+        
+    Returns:
+        解析後的交通監視器物件列表
+    """
+    return [TrafficCamera.model_validate(item) for item in data]
+
+
+def parse_etag_locations(data: List[Dict[str, Any]]) -> List[ETagLocation]:
+    """解析 ETag 設備位置資料
+    
+    Args:
+        data: API 回應的原始資料
+        
+    Returns:
+        解析後的 ETag 設備位置物件列表
+    """
+    return [ETagLocation.model_validate(item) for item in data]
+
+
+def parse_height_limits(data: List[Dict[str, Any]]) -> List[HeightLimit]:
+    """解析交通限高資訊
+    
+    Args:
+        data: API 回應的原始資料
+        
+    Returns:
+        解析後的交通限高資訊物件列表
+    """
+    return [HeightLimit.model_validate(item) for item in data]
+
+
+def parse_traffic_impact_assessments(data: List[Dict[str, Any]]) -> List[TrafficImpactAssessment]:
+    """解析交通影響評估資料
+    
+    Args:
+        data: API 回應的原始資料
+        
+    Returns:
+        解析後的交通影響評估物件列表
+    """
+    return [TrafficImpactAssessment.model_validate(item) for item in data]
 
 
 def parse_traffic_status(data: List[Dict[str, Any]]) -> List[TrafficStatus]:
@@ -116,30 +180,6 @@ def parse_construction_info(data: List[Dict[str, Any]]) -> List[ConstructionInfo
         解析後的道路施工資訊物件列表
     """
     return [ConstructionInfo.model_validate(item) for item in data]
-
-
-def parse_parking_lots(data: List[Dict[str, Any]]) -> List[ParkingLot]:
-    """解析停車場資訊
-    
-    Args:
-        data: API 回應的原始資料
-        
-    Returns:
-        解析後的停車場資訊物件列表
-    """
-    return [ParkingLot.model_validate(item) for item in data]
-
-
-def parse_traffic_cameras(data: List[Dict[str, Any]]) -> List[TrafficCamera]:
-    """解析交通攝影機資訊
-    
-    Args:
-        data: API 回應的原始資料
-        
-    Returns:
-        解析後的交通攝影機資訊物件列表
-    """
-    return [TrafficCamera.model_validate(item) for item in data]
 
 
 def parse_traffic_incidents(data: List[Dict[str, Any]]) -> List[TrafficIncident]:

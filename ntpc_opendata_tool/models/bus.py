@@ -10,15 +10,41 @@ from pydantic import BaseModel, Field
 
 class BusRoute(BaseModel):
     """公車路線模型"""
-    route_id: str = Field(..., alias="routeId")
-    route_name: str = Field(..., alias="routeName")
-    route_type: Optional[str] = Field(None, alias="routeType")
-    operator: Optional[str] = None
-    start_stop: Optional[str] = Field(None, alias="startStop")
-    end_stop: Optional[str] = Field(None, alias="endStop")
-    frequency: Optional[str] = None
-    fare: Optional[str] = None
-    description: Optional[str] = None
+    id: str = Field(..., alias="Id")
+    provider_id: str = Field(..., alias="providerId")
+    provider_name: str = Field(..., alias="providerName")
+    name_zh: str = Field(..., alias="nameZh")
+    name_en: str = Field(..., alias="nameEn")
+    path_attribute_id: str = Field(..., alias="pathAttributeId")
+    path_attribute_name: str = Field(..., alias="pathAttributeName")
+    path_attribute_ename: str = Field(..., alias="pathAttributeEname")
+    build_period: Optional[str] = Field(None, alias="buildPeriod")
+    departure_zh: str = Field(..., alias="departureZh")
+    departure_en: str = Field(..., alias="departureEn")
+    destination_zh: str = Field(..., alias="destinationZh")
+    destination_en: str = Field(..., alias="destinationEn")
+    real_sequence: Optional[str] = Field(None, alias="realSequence")
+    distance: Optional[str] = Field(None, alias="distance")
+    go_first_bus_time: Optional[str] = Field(None, alias="goFirstBusTime")
+    back_first_bus_time: Optional[str] = Field(None, alias="backFirstBusTime")
+    go_last_bus_time: Optional[str] = Field(None, alias="goLastBusTime")
+    back_last_bus_time: Optional[str] = Field(None, alias="backLastBusTime")
+    peak_headway: Optional[str] = Field(None, alias="peakHeadway")
+    holiday_headway_desc: Optional[str] = Field(None, alias="holidayHeadwayDesc")
+    off_peak_headway: Optional[str] = Field(None, alias="offPeakHeadway")
+    bus_time_desc: Optional[str] = Field(None, alias="busTimeDesc")
+    holiday_go_first_bus_time: Optional[str] = Field(None, alias="holidayGoFirstBusTime")
+    holiday_back_first_bus_time: Optional[str] = Field(None, alias="holidayBackFirstBusTime")
+    holiday_go_last_bus_time: Optional[str] = Field(None, alias="holidayGoLastBusTime")
+    holiday_back_last_bus_time: Optional[str] = Field(None, alias="holidayBackLastBusTime")
+    holiday_bus_time_desc: Optional[str] = Field(None, alias="holidayBusTimeDesc")
+    headway_desc: Optional[str] = Field(None, alias="headwayDesc")
+    holiday_peak_headway: Optional[str] = Field(None, alias="holidayPeakHeadway")
+    holiday_off_peak_headway: Optional[str] = Field(None, alias="holidayOffPeakHeadway")
+    segment_buffer_zh: Optional[str] = Field(None, alias="segmentBufferZh")
+    segment_buffer_en: Optional[str] = Field(None, alias="segmentBufferEn")
+    ticket_price_description_zh: Optional[str] = Field(None, alias="ticketPriceDescriptionZh")
+    ticket_price_description_en: Optional[str] = Field(None, alias="ticketPriceDescriptionEn")
     
     class Config:
         populate_by_name = True
@@ -26,15 +52,20 @@ class BusRoute(BaseModel):
 
 class BusStop(BaseModel):
     """公車站點模型"""
-    stop_id: str = Field(..., alias="stopId")
-    stop_name: str = Field(..., alias="stopName")
-    stop_sequence: int = Field(..., alias="stopSequence")
+    id: str = Field(..., alias="Id")
     route_id: str = Field(..., alias="routeId")
-    route_name: str = Field(..., alias="routeName")
-    direction: Optional[int] = None
-    longitude: Optional[float] = None
-    latitude: Optional[float] = None
-    address: Optional[str] = None
+    name_zh: str = Field(..., alias="nameZh")
+    name_en: str = Field(..., alias="nameEn")
+    seq_no: str = Field(..., alias="seqNo")
+    pgp: str = Field(..., alias="pgp")
+    go_back: str = Field(..., alias="goBack")
+    longitude: str = Field(..., alias="longitude")
+    latitude: str = Field(..., alias="latitude")
+    address: Optional[str] = Field(None, alias="address")
+    stop_location_id: str = Field(..., alias="stopLocationId")
+    show_lon: str = Field(..., alias="showLon")
+    show_lat: str = Field(..., alias="showLat")
+    vector: Optional[str] = Field(None, alias="vector")
     
     class Config:
         populate_by_name = True
@@ -42,15 +73,10 @@ class BusStop(BaseModel):
 
 class BusEstimatedTime(BaseModel):
     """公車預計到站時間模型"""
-    route_id: str = Field(..., alias="routeId")
-    route_name: str = Field(..., alias="routeName")
-    stop_id: str = Field(..., alias="stopId")
-    stop_name: str = Field(..., alias="stopName")
-    direction: int
-    estimated_time: Optional[int] = Field(None, alias="estimatedTime")  # 秒數
-    status: Optional[str] = None  # 狀態說明，如「即將進站」、「未發車」等
-    plate_number: Optional[str] = Field(None, alias="plateNumber")  # 車牌號碼
-    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+    route_id: str = Field(..., alias="RouteID")
+    stop_id: str = Field(..., alias="StopID")
+    estimate_time: str = Field(..., alias="EstimateTime")
+    go_back: str = Field(..., alias="GoBack")
     
     class Config:
         populate_by_name = True
@@ -68,6 +94,31 @@ class BusRealTime(BaseModel):
     azimuth: Optional[float] = None  # 方位角
     status: Optional[str] = None  # 狀態，如「行駛中」、「停靠站」等
     updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+    
+    class Config:
+        populate_by_name = True
+
+
+class BusOperator(BaseModel):
+    """公車業者模型"""
+    id: str = Field(..., alias="Id")
+    name: str = Field(..., alias="name")
+    phone: Optional[str] = Field(None, alias="phone")
+    email: Optional[str] = Field(None, alias="email")
+    website: Optional[str] = Field(None, alias="website")
+    address: Optional[str] = Field(None, alias="address")
+    
+    class Config:
+        populate_by_name = True
+
+
+class BusRouteInfo(BaseModel):
+    """公車路線說明模型"""
+    id: str = Field(..., alias="Id")
+    route_name: str = Field(..., alias="routeName")
+    route_type: Optional[str] = Field(None, alias="routeType")
+    route_map_url: Optional[str] = Field(None, alias="routeMapUrl")
+    description: Optional[str] = Field(None, alias="description")
     
     class Config:
         populate_by_name = True
@@ -118,4 +169,28 @@ def parse_bus_real_times(data: List[Dict[str, Any]]) -> List[BusRealTime]:
     Returns:
         解析後的公車即時位置物件列表
     """
-    return [BusRealTime.model_validate(item) for item in data] 
+    return [BusRealTime.model_validate(item) for item in data]
+
+
+def parse_bus_operators(data: List[Dict[str, Any]]) -> List[BusOperator]:
+    """解析公車業者資料
+    
+    Args:
+        data: API 回應的原始資料
+        
+    Returns:
+        解析後的公車業者物件列表
+    """
+    return [BusOperator.model_validate(item) for item in data]
+
+
+def parse_bus_route_info(data: List[Dict[str, Any]]) -> List[BusRouteInfo]:
+    """解析公車路線說明資料
+    
+    Args:
+        data: API 回應的原始資料
+        
+    Returns:
+        解析後的公車路線說明物件列表
+    """
+    return [BusRouteInfo.model_validate(item) for item in data] 

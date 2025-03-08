@@ -6,3 +6,8 @@
 /ntpc_opendata_tool.egg-info
 /response_1741329995790.json
 /uv.lock
+/api_url.csv
+/downloaded_json
+/test_*
+/download_json.py
+/server.py

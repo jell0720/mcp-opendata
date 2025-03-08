@@ -50,7 +50,7 @@ def main(
 ):
     """新北市交通局開放資料命令列工具
     
-    提供便捷的方式查詢新北市的公車、交通和停車場資訊。
+    提供便捷的方式查詢新北市的公車、交通、停車場、自行車及其他交通服務資訊。
     """
     # 設置日誌級別
     if verbose:
@@ -66,6 +66,23 @@ def format_output(data: Any, format_type: str = "table", table_title: Optional[s
         format_type: 輸出格式（table、json 或 text）
         table_title: 表格標題（僅在 format_type 為 table 時有效）
     """
+    # 處理 Pydantic 模型
+    if isinstance(data, list) and len(data) > 0 and hasattr(data[0], 'model_dump_json'):
+        # Pydantic v2 列表
+        json_data = []
+        for item in data:
+            try:
+                json_data.append(item.model_dump())
+            except AttributeError:
+                json_data.append(item.__dict__)
+        data = json_data
+    elif hasattr(data, 'model_dump_json'):
+        # Pydantic v2 單個對象
+        try:
+            data = data.model_dump()
+        except AttributeError:
+            data = data.__dict__
+    
     if format_type == "json":
         if isinstance(data, (dict, list)):
             return console.print(json.dumps(data, ensure_ascii=False, indent=2))
@@ -110,6 +127,9 @@ def format_output(data: Any, format_type: str = "table", table_title: Optional[s
 
 def handle_api_error(func):
     """處理 API 錯誤的裝飾器"""
+    import functools
+    
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -128,12 +148,14 @@ def handle_api_error(func):
 
 def register_commands():
     """註冊所有子命令"""
-    from ntpc_opendata_tool.cli import bus, traffic, parking
+    from ntpc_opendata_tool.cli import bus, traffic, parking, bike, misc_traffic
     
     # 添加子命令
     app.add_typer(bus.app, name="bus", help="公車相關資訊查詢")
     app.add_typer(traffic.app, name="traffic", help="交通狀況相關資訊查詢")
     app.add_typer(parking.app, name="parking", help="停車場相關資訊查詢")
+    app.add_typer(bike.app, name="bike", help="自行車相關資訊查詢")
+    app.add_typer(misc_traffic.app, name="misc-traffic", help="其他交通服務相關資訊查詢")
 
 
 # 為了與 pyproject.toml 中的設定相符，命令列入口點需命名為 cli

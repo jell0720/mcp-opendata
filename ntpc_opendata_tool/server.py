@@ -16,6 +16,8 @@ from ntpc_opendata_tool.utils.logger import setup_logger
 from ntpc_opendata_tool.api.bus import BusAPI
 from ntpc_opendata_tool.api.traffic import TrafficAPI
 from ntpc_opendata_tool.api.parking import ParkingAPI
+from ntpc_opendata_tool.api.bike import BikeAPI
+from ntpc_opendata_tool.api.misc_traffic import MiscTrafficAPI
 from ntpc_opendata_tool.api.client import APIError
 
 # 設置日誌
@@ -25,6 +27,8 @@ logger = setup_logger("ntpc_opendata_mcp")
 bus_api = BusAPI()
 traffic_api = TrafficAPI() 
 parking_api = ParkingAPI()
+bike_api = BikeAPI()
+misc_traffic_api = MiscTrafficAPI()
 
 # 生成唯一的 UUID，用於服務器實例標識
 SERVER_UUID = str(uuid.uuid4())
@@ -35,11 +39,28 @@ class NTPCOpenDataMCP(FastMCP):
     def __init__(self):
         """初始化 MCP 服務器"""
         super().__init__(
-            name="新北市交通局 OpenData",
-            description="查詢新北市交通局開放資料的工具，包括公車、交通狀況和停車場資訊。",
-            id=SERVER_UUID  # 添加唯一識別碼
+            name="ntpc_opendata_mcp",
+            description="新北市交通局開放資料查詢助手",
+            version="0.1.0",
+            uuid=str(uuid.uuid4())
         )
-        logger.info("初始化新北市交通局 OpenData MCP 服務器")
+        
+        # 初始化 logger
+        self.logger = logging.getLogger("ntpc_opendata_mcp")
+        self.logger.setLevel(logging.INFO)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        
+        self.logger.info("初始化新北市交通局 OpenData MCP 服務器")
+        
+        # 初始化 API 客戶端
+        self.bus_api = BusAPI()
+        self.traffic_api = TrafficAPI()
+        self.parking_api = ParkingAPI()
+        self.bike_api = BikeAPI()
+        self.misc_traffic_api = MiscTrafficAPI()
         
         # 註冊查詢處理函數
         @self.tool(name="ntpc-query", description="處理交通相關查詢")
@@ -52,10 +73,14 @@ class NTPCOpenDataMCP(FastMCP):
             Returns:
                 MCP 回應
             """
-            logger.info(f"收到查詢: {query}")
+            self.logger.info(f"收到查詢: {query}")
             print(f"收到查詢: {query}", file=sys.stderr)
             
             try:
+                # 檢查是否為幫助請求
+                if self._is_help_query(query):
+                    return self._get_help_message()
+                
                 # 檢查查詢類型並分發到相應處理函數
                 if self._is_bus_query(query):
                     return await self._handle_bus_query(query)
@@ -63,15 +88,19 @@ class NTPCOpenDataMCP(FastMCP):
                     return await self._handle_traffic_query(query)
                 elif self._is_parking_query(query):
                     return await self._handle_parking_query(query)
+                elif self._is_bike_query(query):
+                    return await self._handle_bike_query(query)
+                elif self._is_misc_traffic_query(query):
+                    return await self._handle_misc_traffic_query(query)
                 else:
                     # 一般性查詢，提供幫助信息
-                    return self._get_help_message()
+                    return f"抱歉，我無法理解您的查詢。以下是我可以提供的服務：\n\n{self._get_help_message()}"
             except APIError as e:
-                logger.error(f"API 錯誤: {e.message}")
+                self.logger.error(f"API 錯誤: {e.message}")
                 print(f"API 錯誤: {e.message}", file=sys.stderr)
                 return f"抱歉，查詢過程中發生錯誤: {e.message}"
             except Exception as e:
-                logger.exception(f"未預期錯誤: {str(e)}")
+                self.logger.exception(f"未預期錯誤: {str(e)}")
                 print(f"未預期錯誤: {str(e)}", file=sys.stderr)
                 return f"抱歉，查詢處理過程中發生未預期錯誤: {str(e)}"
     
@@ -99,9 +128,35 @@ class NTPCOpenDataMCP(FastMCP):
         ]
         return any(keyword in query for keyword in parking_keywords)
     
+    def _is_bike_query(self, query: str) -> bool:
+        """判斷是否為自行車相關查詢"""
+        bike_keywords = [
+            "自行車", "腳踏車", "單車", "單車路線", "單車站點", "單車時刻",
+            "youbike", "ubike", "YouBike", "UBike", "自行車道", "腳踏車道",
+            "自行車架", "腳踏車架", "單車架", "自行車站", "腳踏車站", "單車站"
+        ]
+        return any(keyword in query for keyword in bike_keywords)
+    
+    def _is_misc_traffic_query(self, query: str) -> bool:
+        """判斷是否為其他交通服務相關查詢"""
+        misc_traffic_keywords = [
+            "其他交通服務", "交通資訊", "交通規劃", "交通管理", "交通諮詢",
+            "計程車", "taxi", "Taxi", "TAXI", "拖吊", "保管場", "拖吊保管場",
+            "交通影響評估", "交評", "交通服務", "交通局", "運輸局"
+        ]
+        return any(keyword in query for keyword in misc_traffic_keywords)
+    
+    def _is_help_query(self, query: str) -> bool:
+        """判斷是否為幫助請求"""
+        help_keywords = [
+            "幫助", "help", "Help", "HELP", "說明", "使用說明", "指南", "使用指南",
+            "怎麼用", "如何使用", "功能", "有什麼功能", "能做什麼", "可以做什麼"
+        ]
+        return any(keyword in query for keyword in help_keywords)
+    
     async def _handle_bus_query(self, query: str) -> str:
         """處理公車相關查詢"""
-        logger.info("處理公車相關查詢")
+        self.logger.info("處理公車相關查詢")
         print("處理公車相關查詢", file=sys.stderr)
         
         # 嘗試提取公車路線號碼
@@ -115,19 +170,19 @@ class NTPCOpenDataMCP(FastMCP):
         try:
             if route_name and "到站" in query:
                 # 查詢到站時間
-                data = bus_api.get_estimated_time(route_name, stop_name)
+                data = self.bus_api.get_estimated_time(route_name, stop_name)
                 return self._format_bus_estimated_time(data, route_name, stop_name)
             elif route_name and ("站牌" in query or "站點" in query):
                 # 查詢路線站牌
-                data = bus_api.get_stops(route_name)
+                data = self.bus_api.get_stops(route_name)
                 return self._format_bus_stops(data, route_name)
             elif route_name:
                 # 查詢路線資訊
-                data = bus_api.get_routes(route_name)
+                data = self.bus_api.get_routes(route_name)
                 return self._format_bus_routes(data, route_name)
             elif stop_name:
                 # 查詢站點經過的公車
-                data = bus_api.search_by_stop(stop_name)
+                data = self.bus_api.search_by_stop(stop_name)
                 return self._format_bus_search_by_stop(data, stop_name)
             else:
                 # 一般公車查詢
@@ -137,7 +192,7 @@ class NTPCOpenDataMCP(FastMCP):
     
     async def _handle_traffic_query(self, query: str) -> str:
         """處理交通狀況相關查詢"""
-        logger.info("處理交通狀況相關查詢")
+        self.logger.info("處理交通狀況相關查詢")
         print("處理交通狀況相關查詢", file=sys.stderr)
         
         # 嘗試提取區域
@@ -151,26 +206,26 @@ class NTPCOpenDataMCP(FastMCP):
         try:
             if "施工" in query:
                 # 查詢道路施工資訊
-                data = traffic_api.get_construction_info(area)
+                data = self.traffic_api.get_construction_info(area)
                 return self._format_traffic_construction(data, area)
             elif "攝影機" in query or "監視器" in query or "即時影像" in query:
                 # 查詢交通攝影機
-                data = traffic_api.get_traffic_cameras(area, road)
+                data = self.traffic_api.get_traffic_cameras(area, road)
                 return self._format_traffic_cameras(data, area, road)
             elif "事件" in query or "事故" in query:
                 # 查詢交通事件
-                data = traffic_api.get_traffic_incidents(area)
+                data = self.traffic_api.get_traffic_incidents(area)
                 return self._format_traffic_incidents(data, area)
             else:
                 # 查詢交通狀況
-                data = traffic_api.get_traffic_status(area, road)
+                data = self.traffic_api.get_traffic_status(area, road)
                 return self._format_traffic_status(data, area, road)
         except APIError as e:
             return f"查詢交通資訊時發生錯誤: {e.message}"
     
     async def _handle_parking_query(self, query: str) -> str:
         """處理停車場相關查詢"""
-        logger.info("處理停車場相關查詢")
+        self.logger.info("處理停車場相關查詢")
         print("處理停車場相關查詢", file=sys.stderr)
         
         # 嘗試提取區域
@@ -184,32 +239,185 @@ class NTPCOpenDataMCP(FastMCP):
         try:
             if "收費" in query or "費率" in query or "費用" in query:
                 # 查詢停車場收費標準
-                data = parking_api.get_parking_lots()
+                data = self.parking_api.get_parking_lots()
                 return self._format_parking_fee_rates(data)
             elif "有空位" in query or "有位子" in query or "可以停" in query:
                 # 查詢有空位的停車場
                 min_spaces = 1
-                data = parking_api.get_available_parking_lots(min_spaces, area)
+                data = self.parking_api.get_available_parking_lots(min_spaces, area)
                 return self._format_parking_available(data, area)
             elif area and type_name:
                 # 查詢特定區域和類型的停車場
-                data = parking_api.get_parking_lots_by_type(type_name)
+                data = self.parking_api.get_parking_lots_by_type(type_name)
                 # 手動過濾區域
                 data = [item for item in data if area in item.get("area", "")]
                 return self._format_parking_lots(data, area, type_name)
             elif area:
                 # 查詢特定區域的停車場
-                data = parking_api.get_parking_lots(area)
+                data = self.parking_api.get_parking_lots(area)
                 return self._format_parking_lots(data, area)
             elif type_name:
                 # 查詢特定類型的停車場
-                data = parking_api.get_parking_lots_by_type(type_name)
+                data = self.parking_api.get_parking_lots_by_type(type_name)
                 return self._format_parking_lots(data, type_name=type_name)
             else:
                 # 一般停車場查詢
                 return "您似乎在查詢停車場資訊，請提供更具體的資訊，例如區域或停車場類型。例如「板橋區有哪些停車場」或「新莊區有空位的停車場」。"
         except APIError as e:
             return f"查詢停車場資訊時發生錯誤: {e.message}"
+    
+    async def _handle_bike_query(self, query: str) -> str:
+        """處理自行車相關查詢"""
+        try:
+            # 嘗試提取路線編號
+            route_match = re.search(r'([A-Za-z0-9]+)\s*(?:路線|自行車|腳踏車|單車)', query)
+            route_name = route_match.group(1) if route_match else None
+            
+            # 嘗試提取站點名稱
+            stop_match = re.search(r'到\s*([^\s]+)\s*(?:站|站點)', query)
+            stop_name = stop_match.group(1) if stop_match else None
+            
+            # 嘗試提取行政區
+            district_match = re.search(r'([^\s]+(?:區|鎮|市))', query)
+            district = district_match.group(1) if district_match else None
+            
+            # 判斷查詢類型
+            if "youbike" in query.lower() or "ubike" in query.lower():
+                # YouBike 站點查詢
+                if district:
+                    youbike_stations = self.bike_api.get_youbike_stations(area=district)
+                    return self._format_traffic_service_info(youbike_stations, "YouBike 站點")
+                else:
+                    youbike_stations = self.bike_api.get_youbike_stations()
+                    return self._format_traffic_service_info(youbike_stations, "YouBike 站點")
+            
+            elif "自行車架" in query or "腳踏車架" in query or "單車架" in query:
+                # 自行車架查詢
+                near_mrt = "捷運" in query or "mrt" in query.lower() or "MRT" in query
+                
+                if district:
+                    bike_racks = self.bike_api.get_bike_racks(area=district, near_mrt=near_mrt)
+                    return self._format_traffic_service_info(bike_racks, "自行車架")
+                else:
+                    bike_racks = self.bike_api.get_bike_racks(near_mrt=near_mrt)
+                    return self._format_traffic_service_info(bike_racks, "自行車架")
+            
+            elif "自行車道" in query or "腳踏車道" in query or "單車道" in query:
+                # 自行車道查詢
+                bike_lanes = self.bike_api.get_bike_lanes()
+                return self._format_traffic_service_info(bike_lanes, "自行車道")
+            
+            elif "附近" in query or "最近" in query:
+                # 查詢附近的 YouBike 站點
+                coord_match = re.search(r'座標\s*(\d+\.\d+)\s*,\s*(\d+\.\d+)', query)
+                if coord_match:
+                    lat = float(coord_match.group(1))
+                    lng = float(coord_match.group(2))
+                    radius = 500  # 預設搜尋半徑 500 公尺
+                    
+                    # 嘗試提取搜尋半徑
+                    radius_match = re.search(r'(\d+)\s*(?:公尺|米|m)', query)
+                    if radius_match:
+                        radius = int(radius_match.group(1))
+                    
+                    nearby_stations = self.bike_api.find_nearby_youbike(lat, lng, radius)
+                    return self._format_traffic_service_info(nearby_stations, f"附近 {radius} 公尺內的 YouBike 站點")
+                else:
+                    return "請提供座標以查詢附近的 YouBike 站點，例如「座標25.0330, 121.5654附近的 YouBike 站點」。"
+            
+            elif "可借" in query or "有車" in query:
+                # 查詢有可借車輛的 YouBike 站點
+                min_bikes = 1  # 預設至少有 1 輛可借車輛
+                
+                # 嘗試提取最少可借車輛數
+                min_bikes_match = re.search(r'至少\s*(\d+)\s*(?:輛|台|臺)', query)
+                if min_bikes_match:
+                    min_bikes = int(min_bikes_match.group(1))
+                
+                available_stations = self.bike_api.get_available_youbikes(min_bikes)
+                return self._format_traffic_service_info(available_stations, f"有至少 {min_bikes} 輛可借車輛的 YouBike 站點")
+            
+            else:
+                # 默認返回所有 YouBike 站點
+                youbike_stations = self.bike_api.get_youbike_stations()
+                return self._format_traffic_service_info(youbike_stations, "YouBike 站點")
+        
+        except Exception as e:
+            self.logger.error(f"處理自行車查詢時出錯: {str(e)}")
+            return f"抱歉，處理您的自行車查詢時出現錯誤: {str(e)}"
+    
+    async def _handle_misc_traffic_query(self, query: str) -> str:
+        """處理其他交通服務相關查詢"""
+        try:
+            # 嘗試提取服務類型
+            service_type = None
+            if "計程車" in query or "taxi" in query.lower():
+                service_type = "計程車"
+                keyword_match = re.search(r'(?:搜尋|查詢)\s*([^\s]+)\s*(?:計程車|的計程車)', query)
+                keyword = keyword_match.group(1) if keyword_match else None
+                
+                if keyword:
+                    taxi_services = self.misc_traffic_api.search_taxi_service(keyword)
+                    return self._format_traffic_service_info(taxi_services, "計程車服務")
+                else:
+                    taxi_services = self.misc_traffic_api.get_taxi_services()
+                    return self._format_traffic_service_info(taxi_services, "計程車服務")
+            
+            elif "拖吊" in query or "保管場" in query:
+                service_type = "拖吊保管場"
+                district_match = re.search(r'([^\s]+(?:區|鎮|市))', query)
+                district = district_match.group(1) if district_match else None
+                
+                if "最近" in query or "附近" in query:
+                    # 尋找最近的拖吊保管場
+                    # 注意：這裡需要提取座標，但通常用戶不會直接提供座標
+                    # 這裡僅作為示例，實際應用可能需要地址轉座標的功能
+                    coord_match = re.search(r'座標\s*(\d+\.\d+)\s*,\s*(\d+\.\d+)', query)
+                    if coord_match:
+                        lat = float(coord_match.group(1))
+                        lng = float(coord_match.group(2))
+                        nearest = self.misc_traffic_api.find_nearest_towing_storage(lat, lng)
+                        if nearest:
+                            # 將 Pydantic 模型轉換為字典
+                            if hasattr(nearest, 'model_dump'):
+                                nearest = nearest.model_dump()
+                            return self._format_traffic_service_info([nearest], "最近的拖吊保管場")
+                        else:
+                            return "找不到附近的拖吊保管場。"
+                    else:
+                        return "請提供座標以查詢最近的拖吊保管場，例如「座標25.0330, 121.5654附近的拖吊保管場」。"
+                
+                elif district:
+                    # 按區域查詢拖吊保管場
+                    towing_storages = self.misc_traffic_api.get_towing_storage_info()
+                    # 將 Pydantic 模型轉換為字典
+                    if towing_storages and hasattr(towing_storages[0], 'model_dump'):
+                        towing_storages_dict = [item.model_dump() for item in towing_storages]
+                    else:
+                        towing_storages_dict = towing_storages
+                    # 過濾特定區域的拖吊保管場
+                    filtered_storages = [
+                        storage for storage in towing_storages_dict 
+                        if district in storage.get("address", "")
+                    ]
+                    return self._format_traffic_service_info(filtered_storages, "拖吊保管場")
+                else:
+                    towing_storages = self.misc_traffic_api.get_towing_storage_info()
+                    return self._format_traffic_service_info(towing_storages, "拖吊保管場")
+            
+            elif "交通影響評估" in query or "交評" in query:
+                service_type = "交通影響評估"
+                assessments = self.misc_traffic_api.get_traffic_impact_assessment()
+                return self._format_traffic_service_info(assessments, "交通影響評估")
+            
+            else:
+                # 默認返回計程車服務資訊
+                taxi_services = self.misc_traffic_api.get_taxi_services()
+                return self._format_traffic_service_info(taxi_services, "計程車服務")
+        
+        except Exception as e:
+            self.logger.error(f"處理其他交通服務查詢時出錯: {str(e)}")
+            return f"抱歉，處理您的交通服務查詢時出現錯誤: {str(e)}"
     
     def _format_bus_routes(self, data: List[Dict[str, Any]], route_name: Optional[str] = None) -> str:
         """格式化公車路線資訊"""
@@ -636,30 +844,343 @@ class NTPCOpenDataMCP(FastMCP):
     
     def _get_help_message(self) -> str:
         """獲取幫助信息"""
-        return """
-## 新北市交通局 OpenData 查詢工具
+        return """### 新北市交通局開放資料查詢助手
 
-您可以查詢以下資訊：
+我可以幫您查詢新北市的交通相關資訊，包括：
 
-### 1. 公車資訊
-- 公車路線查詢，例如：「307公車的路線」
-- 站點查詢，例如：「307公車的站牌」
-- 到站時間查詢，例如：「307公車幾分鐘到站」
-- 站點經過的公車，例如：「捷運板橋站有哪些公車」
+1. **公車資訊**：
+   - 公車路線查詢，例如「307公車的路線」
+   - 站牌查詢，例如「307公車的站牌」
+   - 到站時間查詢，例如「307公車到板橋站的時間」
+   - 站點公車查詢，例如「板橋站有哪些公車」
 
-### 2. 交通狀況
-- 即時路況查詢，例如：「板橋區交通狀況」
-- 道路施工資訊，例如：「新莊區道路施工」
-- 交通攝影機資訊，例如：「板橋區交通監視器」
-- 交通事件資訊，例如：「新莊區交通事故」
+2. **交通狀況**：
+   - 道路交通狀況，例如「板橋區的交通狀況」
+   - 道路施工資訊，例如「板橋區有哪些道路施工」
+   - 交通攝影機，例如「板橋區的交通攝影機」
+   - 交通事件，例如「板橋區有哪些交通事件」
 
-### 3. 停車場資訊
-- 停車場查詢，例如：「板橋區停車場」
-- 有空位的停車場，例如：「板橋區有空位的停車場」
-- 停車場收費標準，例如：「停車場收費標準」
+3. **停車場資訊**：
+   - 停車場查詢，例如「板橋區有哪些停車場」
+   - 停車場空位查詢，例如「板橋區有空位的停車場」
+   - 停車場收費標準，例如「板橋區停車場的收費標準」
 
-請提供更具體的資訊，以幫助我提供更準確的查詢結果。
-        """
+4. **自行車資訊**：
+   - YouBike 站點查詢，例如「板橋區的 YouBike 站點」
+   - 自行車架查詢，例如「板橋區的自行車架」
+   - 自行車道查詢，例如「板橋區的自行車道」
+
+5. **其他交通服務**：
+   - 計程車服務查詢，例如「新北市的計程車服務」
+   - 拖吊保管場查詢，例如「板橋區的拖吊保管場」
+   - 交通影響評估查詢，例如「新北市的交通影響評估」
+
+請告訴我您想查詢的資訊，我會盡力協助您。
+"""
+
+    def _format_traffic_service_info(self, data: List[Dict[str, Any]], service_type: Optional[str] = None) -> str:
+        """格式化交通服務資訊"""
+        if not data:
+            return f"找不到{service_type or ''}交通服務資訊。"
+        
+        if service_type:
+            result = f"### {service_type}資訊\n\n"
+        else:
+            result = "### 交通服務資訊\n\n"
+        
+        # 檢查是否為 Pydantic 模型對象列表
+        if data and hasattr(data[0], 'model_dump'):
+            # 將 Pydantic 模型轉換為字典
+            data = [item.model_dump() for item in data]
+        
+        for service in data[:10]:  # 限制顯示數量避免太長
+            # 根據不同類型的服務處理不同的字段
+            if "taxi_transportation_service" in service:
+                # 計程車服務（舊格式）
+                name = service.get("taxi_transportation_service", service.get("name", "無名稱"))
+                phone = service.get("phone_number", service.get("phone", "無電話"))
+                
+                result += f"- **{name}**\n"
+                if phone:
+                    result += f"  電話: {phone}\n"
+                result += "\n"
+            elif "title" in service:
+                # 拖吊保管場
+                name = service.get("title", service.get("name", "無名稱"))
+                address = service.get("address", "無地址")
+                tel = service.get("tel", "無電話")
+                distance = service.get("distance")
+                
+                result += f"- **{name}**\n"
+                if address:
+                    result += f"  地址: {address}\n"
+                if tel:
+                    result += f"  電話: {tel}\n"
+                if distance:
+                    result += f"  距離: {distance} 公尺\n"
+                result += "\n"
+            elif "url" in service:
+                # 交通影響評估
+                name = service.get("name", "無名稱")
+                category = service.get("category", "無類別")
+                url = service.get("url", "")
+                
+                result += f"- **{name}**"
+                if category:
+                    result += f" ({category})"
+                result += "\n"
+                if url:
+                    result += f"  連結: {url}\n"
+                result += "\n"
+            elif "countycode" in service and "phone" in service:
+                # 計程車服務（新格式）
+                name = service.get("name", "無名稱")
+                phone = service.get("phone", "無電話")
+                
+                result += f"- **{name}**\n"
+                if phone:
+                    result += f"  電話: {phone}\n"
+                result += "\n"
+            elif "station_name" in service or "sna" in service:
+                # YouBike 站點
+                name = service.get("station_name", service.get("sna", "無名稱"))
+                address = service.get("address", service.get("ar", "無地址"))
+                available_bikes = service.get("available_bikes", service.get("sbi", 0))
+                empty_spaces = service.get("empty_spaces", service.get("bemp", 0))
+                total_bikes = service.get("total_bikes", service.get("tot", 0))
+                distance = service.get("distance")
+                
+                result += f"- **{name}**\n"
+                if address:
+                    result += f"  地址: {address}\n"
+                result += f"  可借車輛: {available_bikes} 輛\n"
+                result += f"  可還空位: {empty_spaces} 個\n"
+                result += f"  總車位數: {total_bikes} 個\n"
+                if distance:
+                    result += f"  距離: {distance} 公尺\n"
+                result += "\n"
+            elif "area" in service and "quantity" in service:
+                # 自行車架
+                if "station" in service:
+                    # 捷運站週邊自行車架
+                    station = service.get("station", "無站名")
+                    item = service.get("item", "無項目")
+                    quantity = service.get("quantity", 0)
+                    
+                    result += f"- **{station}**\n"
+                    result += f"  項目: {item}\n"
+                    result += f"  數量: {quantity} 個\n"
+                    result += "\n"
+                else:
+                    # 行政區自行車架
+                    area = service.get("area", "無區域")
+                    item = service.get("item", "無項目")
+                    quantity = service.get("quantity", 0)
+                    
+                    result += f"- **{area}**\n"
+                    result += f"  項目: {item}\n"
+                    result += f"  數量: {quantity} 個\n"
+                    result += "\n"
+            elif "type" in service and "bikeway" in service:
+                # 自行車道
+                district = service.get("district", "無區域")
+                bikeway = service.get("bikeway", "無名稱")
+                route = service.get("route", "無路線")
+                length = service.get("length", 0)
+                
+                result += f"- **{bikeway}**\n"
+                result += f"  行政區: {district}\n"
+                result += f"  路線: {route}\n"
+                result += f"  長度: {length} 公里\n"
+                result += "\n"
+            else:
+                # 一般服務
+                name = service.get("name", "無名稱")
+                category = service.get("category", "無類別")
+                address = service.get("address", "無地址")
+                tel = service.get("tel", "無電話")
+                phone = service.get("phone", "")  # 計程車服務可能有 phone 而非 tel
+                url = service.get("url", "")  # 交通影響評估可能有 url
+                
+                result += f"- **{name}**"
+                if category:
+                    result += f" ({category})"
+                result += "\n"
+                
+                if address:
+                    result += f"  地址: {address}\n"
+                if tel:
+                    result += f"  電話: {tel}\n"
+                if phone and not tel:  # 如果有 phone 但沒有 tel，則顯示 phone
+                    result += f"  電話: {phone}\n"
+                if url:
+                    result += f"  連結: {url}\n"
+                result += "\n"
+        
+        if len(data) > 10:
+            result += f"\n*共有 {len(data)} 筆資料，僅顯示前 10 筆。*"
+        
+        return result
+
+    def _format_bike_routes(self, data: List[Dict[str, Any]], route_name: Optional[str] = None) -> str:
+        """格式化自行車路線資訊"""
+        if not data:
+            return f"找不到自行車路線 {route_name} 的資訊。"
+        
+        # 檢查是否為 Pydantic 模型對象列表
+        if data and hasattr(data[0], 'model_dump'):
+            # 將 Pydantic 模型轉換為字典
+            data = [item.model_dump() for item in data]
+        
+        if len(data) == 1:
+            route = data[0]
+            result = f"### 自行車路線 {route.get('name', '無編號')} 資訊\n\n"
+            result += f"- **路線類型**: {route.get('type', '無資料')}\n"
+            result += f"- **縣市代碼**: {route.get('countycode', '無資料')}\n"
+            result += f"- **行政區**: {route.get('district', '無資料')}\n"
+            result += f"- **路線**: {route.get('route', '無資料')}\n"
+            result += f"- **建置年月**: {route.get('year_month', '無資料')}\n"
+            result += f"- **長度(公里)**: {route.get('length', '無資料')}\n"
+            
+            return result
+        else:
+            if route_name:
+                result = f"### 與 {route_name} 相關的自行車路線:\n\n"
+            else:
+                result = "### 自行車路線列表:\n\n"
+            
+            for route in data[:10]:  # 限制顯示數量避免太長
+                result += f"- **{route.get('name', '無編號')}**: {route.get('district', '無區域')} - {route.get('route', '無路線')}, 長度: {route.get('length', '無資料')}公里\n"
+            
+            if len(data) > 10:
+                result += f"\n*共有 {len(data)} 條路線，僅顯示前 10 條。*"
+            
+            return result
+
+    def _format_bike_stops(self, data: List[Dict[str, Any]], route_name: str) -> str:
+        """格式化自行車站點資訊"""
+        if not data:
+            return f"找不到自行車路線 {route_name} 的站點資訊。"
+        
+        # 檢查是否為 Pydantic 模型對象列表
+        if data and hasattr(data[0], 'model_dump'):
+            # 將 Pydantic 模型轉換為字典
+            data = [item.model_dump() for item in data]
+        
+        result = f"### 自行車路線 {route_name} 的站點資訊\n\n"
+        
+        # 分為去程和回程
+        go_stops = [stop for stop in data if stop.get("direction") == 0]
+        back_stops = [stop for stop in data if stop.get("direction") == 1]
+        
+        if go_stops:
+            result += "#### 去程站點\n\n"
+            for i, stop in enumerate(go_stops, 1):
+                result += f"{i}. **{stop.get('name', '無名稱')}**"
+                if stop.get("address"):
+                    result += f" ({stop.get('address')})"
+                result += "\n"
+        
+        if back_stops:
+            result += "\n#### 回程站點\n\n"
+            for i, stop in enumerate(back_stops, 1):
+                result += f"{i}. **{stop.get('name', '無名稱')}**"
+                if stop.get("address"):
+                    result += f" ({stop.get('address')})"
+                result += "\n"
+        
+        return result
+
+    def _format_bike_estimated_time(self, data: List[Dict[str, Any]], route_name: str, stop_name: Optional[str] = None) -> str:
+        """格式化自行車預計到站時間"""
+        if not data:
+            return f"找不到自行車路線 {route_name} 的到站時間資訊。"
+        
+        # 檢查是否為 Pydantic 模型對象列表
+        if data and hasattr(data[0], 'model_dump'):
+            # 將 Pydantic 模型轉換為字典
+            data = [item.model_dump() for item in data]
+        
+        if stop_name:
+            # 過濾特定站點
+            filtered_data = [item for item in data if stop_name in item.get("name", "")]
+            if not filtered_data:
+                return f"找不到自行車路線 {route_name} 在站點 {stop_name} 的到站時間資訊。"
+            data = filtered_data
+        
+        result = f"### 自行車路線 {route_name} 的到站時間\n\n"
+        
+        # 分為去程和回程
+        go_stops = [stop for stop in data if stop.get("direction") == 0]
+        back_stops = [stop for stop in data if stop.get("direction") == 1]
+        
+        if go_stops:
+            result += "#### 去程\n\n"
+            for stop in go_stops:
+                name = stop.get("name", "無名稱")
+                eta = stop.get("eta", "無資料")
+                status = stop.get("status", "無狀態")
+                
+                result += f"- **{name}**: "
+                if eta == -1:
+                    result += "尚未發車"
+                elif eta == 0:
+                    result += "進站中"
+                else:
+                    result += f"預計 {eta} 分鐘到站"
+                
+                if status:
+                    result += f" ({status})"
+                result += "\n"
+        
+        if back_stops:
+            result += "\n#### 回程\n\n"
+            for stop in back_stops:
+                name = stop.get("name", "無名稱")
+                eta = stop.get("eta", "無資料")
+                status = stop.get("status", "無狀態")
+                
+                result += f"- **{name}**: "
+                if eta == -1:
+                    result += "尚未發車"
+                elif eta == 0:
+                    result += "進站中"
+                else:
+                    result += f"預計 {eta} 分鐘到站"
+                
+                if status:
+                    result += f" ({status})"
+                result += "\n"
+        
+        return result
+
+    def _format_bike_search_by_stop(self, data: List[Dict[str, Any]], stop_name: str) -> str:
+        """格式化站點經過的自行車路線"""
+        if not data:
+            return f"找不到經過站點 {stop_name} 的自行車路線。"
+        
+        # 檢查是否為 Pydantic 模型對象列表
+        if data and hasattr(data[0], 'model_dump'):
+            # 將 Pydantic 模型轉換為字典
+            data = [item.model_dump() for item in data]
+        
+        result = f"### 經過站點 {stop_name} 的自行車路線\n\n"
+        
+        for route in data:
+            route_name = route.get("name", "無編號")
+            direction = "去程" if route.get("direction") == 0 else "回程"
+            eta = route.get("eta", "無資料")
+            
+            result += f"- **{route_name}** ({direction}): "
+            if eta == -1:
+                result += "尚未發車"
+            elif eta == 0:
+                result += "進站中"
+            else:
+                result += f"預計 {eta} 分鐘到站"
+            result += "\n"
+        
+        return result
 
 
 # 初始化 MCP 服務器的實例
