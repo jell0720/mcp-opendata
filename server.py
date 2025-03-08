@@ -233,6 +233,205 @@ def get_traffic_impact_assessment():
         logger.error(f"獲取建築物交通影響評估資訊失敗: {e.message}")
         return {"error": e.message, "status_code": e.status_code}
 
+def _is_bus_query(self, query: str) -> bool:
+    """判斷是否為公車相關查詢"""
+    bus_keywords = {
+        "路線": ["公車", "巴士", "路線", "幾號", "班次", "路線圖", "路線時刻"],
+        "站點": ["站牌", "站點", "車站", "站", "下車", "上車"],
+        "到站": ["幾分鐘", "到站", "進站", "抵達", "還要多久", "什麼時候到"],
+        "時刻": ["發車", "末班", "首班", "班次", "時刻表", "幾點"],
+        "業者": ["公車處", "客運", "業者", "哪家"],
+        "優惠": ["轉乘", "優惠", "票價", "多少錢", "費用"]
+    }
+    
+    # 檢查是否包含路線號碼
+    route_patterns = [
+        r'\d+[a-zA-Z]?(?:路|線|公車|號)',  # 一般路線，如 307, 307A
+        r'[藍紅綠橘棕]\d+',                # 藍線等，如 藍1
+        r'F\d+',                          # F開頭路線，如 F501
+    ]
+    
+    # 檢查關鍵字
+    for category, keywords in bus_keywords.items():
+        if any(keyword in query for keyword in keywords):
+            return True
+            
+    # 檢查路線號碼
+    for pattern in route_patterns:
+        if re.search(pattern, query):
+            return True
+            
+    return False
+
+def _is_bike_query(self, query: str) -> bool:
+    """判斷是否為自行車相關查詢"""
+    bike_keywords = {
+        "系統": ["youbike", "ubike", "微笑單車", "共享單車"],
+        "設施": ["自行車道", "腳踏車道", "單車道", "自行車架", "單車架", "停車架"],
+        "狀態": ["可以借", "有車", "可借", "可還", "車位", "空位"],
+        "位置": ["在哪", "附近", "哪裡有", "距離", "多遠"]
+    }
+    
+    # 檢查自行車相關詞
+    base_terms = ["自行車", "腳踏車", "單車", "bike"]
+    if any(term in query.lower() for term in base_terms):
+        return True
+        
+    # 檢查關鍵字組合
+    for category, keywords in bike_keywords.items():
+        if any(keyword.lower() in query.lower() for keyword in keywords):
+            return True
+            
+    return False
+
+def _is_parking_query(self, query: str) -> bool:
+    """判斷是否為停車場相關查詢"""
+    parking_keywords = {
+        "一般": ["停車場", "停車", "泊車", "車位", "停車格"],
+        "費用": ["收費", "費率", "計費", "票價", "多少錢"],
+        "狀態": ["有位子", "有空位", "滿了", "客滿", "可以停"],
+        "特殊": ["婦幼", "身障", "殘障", "機車", "汽車"],
+        "緊急": ["颱風", "防災", "臨時", "緊急"]
+    }
+    
+    # 檢查關鍵字組合
+    for category, keywords in parking_keywords.items():
+        if any(keyword in query for keyword in keywords):
+            return True
+            
+    # 檢查問句模式
+    parking_patterns = [
+        r'停車.*在哪',
+        r'哪裡.*停車',
+        r'可以停.*車',
+        r'車.*停在哪'
+    ]
+    
+    for pattern in parking_patterns:
+        if re.search(pattern, query):
+            return True
+            
+    return False
+
+def _is_traffic_query(self, query: str) -> bool:
+    """判斷是否為交通狀況相關查詢"""
+    traffic_keywords = {
+        "路況": ["塞車", "壅塞", "順暢", "車多", "車流", "車速"],
+        "監控": ["監視器", "攝影機", "即時影像", "路況", "etag"],
+        "施工": ["施工", "封路", "改道", "維修", "工程"],
+        "事件": ["事故", "車禍", "故障", "拋錨", "事件"],
+        "限制": ["限高", "限重", "禁行", "單行"]
+    }
+    
+    # 檢查關鍵字組合
+    for category, keywords in traffic_keywords.items():
+        if any(keyword in query for keyword in keywords):
+            return True
+            
+    # 檢查問句模式
+    traffic_patterns = [
+        r'路況.*如何',
+        r'交通.*狀況',
+        r'好不好走',
+        r'塞不塞'
+    ]
+    
+    for pattern in traffic_patterns:
+        if re.search(pattern, query):
+            return True
+            
+    return False
+
+def _is_misc_traffic_query(self, query: str) -> bool:
+    """判斷是否為其他交通服務相關查詢"""
+    misc_keywords = {
+        "計程車": ["計程車", "taxi", "叫車", "車行"],
+        "拖吊": ["拖吊", "保管場", "被拖", "領車"],
+        "評估": ["交通影響", "評估", "交評", "影響評估"]
+    }
+    
+    # 檢查關鍵字組合
+    for category, keywords in misc_keywords.items():
+        if any(keyword.lower() in query.lower() for keyword in keywords):
+            return True
+            
+    return False
+
+def _get_help_message(self) -> str:
+    """獲取幫助信息"""
+    return """### 新北市交通局開放資料查詢助手
+
+我可以協助您查詢以下交通相關資訊：
+
+🚌 公車資訊
+- 路線查詢：「307公車怎麼走？」
+- 到站時間：「307公車什麼時候到捷運板橋站？」
+- 站點查詢：「捷運板橋站有哪些公車？」
+- 路線類型：「板橋有哪些快速公車？」
+- 轉乘優惠：「哪些公車有轉乘優惠？」
+
+🚲 自行車資訊
+- YouBike站點：「板橋火車站附近有YouBike嗎？」
+- 即時車位：「哪些YouBike站還有車可以借？」
+- 自行車道：「板橋區的自行車道在哪裡？」
+- 停車架：「捷運站附近有自行車架嗎？」
+
+🅿️ 停車資訊
+- 停車場查詢：「板橋車站附近有停車場嗎？」
+- 即時空位：「板橋哪些停車場還有空位？」
+- 收費標準：「板橋停車場要收多少錢？」
+- 特殊車位：「板橋區有哪些婦幼停車位？」
+
+🚦 交通狀況
+- 即時路況：「板橋往台北現在塞車嗎？」
+- 施工資訊：「板橋區最近有哪裡在施工？」
+- 交通事件：「板橋區有發生車禍嗎？」
+- 監視器：「板橋區有哪些交通監視器？」
+
+🚕 其他服務
+- 計程車：「板橋區有哪些合法計程車行？」
+- 拖吊服務：「我的車被拖吊了要去哪裡領？」
+- 交通評估：「新板特區的交通影響評估如何？」
+
+您可以用自然的方式詢問，我會協助您找到需要的資訊。
+需要範例可以輸入「範例」或「使用說明」。"""
+
+def _format_no_result_message(self, query_type: str, area: Optional[str] = None) -> str:
+    """格式化無結果時的提示訊息"""
+    messages = {
+        "bus": f"抱歉，找不到相關的公車資訊。您可以：\n"
+              f"1. 確認路線號碼是否正確\n"
+              f"2. 使用較寬鬆的搜尋條件\n"
+              f"3. 改用站點名稱搜尋\n"
+              f"4. 查詢附近的其他站點",
+        
+        "bike": f"抱歉，找不到相關的自行車資訊。您可以：\n"
+               f"1. 擴大搜尋範圍\n"
+               f"2. 查詢附近的其他站點\n"
+               f"3. 使用座標搜尋附近站點",
+        
+        "parking": f"抱歉，找不到相關的停車場資訊。您可以：\n"
+                  f"1. 查詢附近的其他停車場\n"
+                  f"2. 嘗試不同類型的停車場\n"
+                  f"3. 查詢路邊停車格",
+        
+        "traffic": f"抱歉，找不到相關的交通狀況資訊。您可以：\n"
+                  f"1. 查詢主要道路的狀況\n"
+                  f"2. 使用交通監視器查看即時狀況\n"
+                  f"3. 查詢特定路段的施工資訊",
+        
+        "misc": f"抱歉，找不到相關的交通服務資訊。您可以：\n"
+               f"1. 使用其他關鍵字搜尋\n"
+               f"2. 查詢鄰近區域的服務\n"
+               f"3. 聯繫交通局詢問更多資訊"
+    }
+    
+    base_message = messages.get(query_type, "抱歉，找不到相關資訊。")
+    if area:
+        base_message = f"{area}地區：{base_message}"
+        
+    return base_message
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
