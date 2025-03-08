@@ -13,7 +13,28 @@
 
 ## 安裝
 
-### 使用虛擬環境
+### 使用 uv（推薦）
+
+```bash
+# 安裝 uv（如果尚未安裝）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 建立虛擬環境
+uv venv
+
+# 啟動虛擬環境
+source .venv/bin/activate  # Linux/macOS
+# 或
+.venv\Scripts\activate     # Windows
+
+# 安裝依賴
+uv pip install -e .
+
+# 安裝開發依賴（可選）
+uv pip install -e ".[dev]"
+```
+
+### 使用傳統 pip
 
 ```bash
 # 建立虛擬環境
@@ -38,32 +59,148 @@ mcp install ntpc_opendata_tool/server.py --name "新北市交通 OpenData 查詢
 
 ### 命令列工具
 
+#### 公車查詢
 ```bash
-# 基本使用
+# 查看所有指令說明
 ntpc-opendata --help
+
+# 查看公車相關指令
+ntpc-opendata bus --help
 
 # 查詢公車路線
 ntpc-opendata bus routes 307
 
-# 查詢站點資訊
+# 查詢公車站點
+ntpc-opendata bus stops 307
+
+# 查詢公車到站時間
+ntpc-opendata bus arrival 307 --stop "捷運板橋站"
+
+# 查詢所有站點
+ntpc-opendata bus all-stops
+
+# 查詢特定站點的公車
 ntpc-opendata bus search-by-stop "捷運板橋站"
 
-# 查詢即時交通狀況
-ntpc-opendata traffic status --area "板橋區"
+# 查詢公車即時位置
+ntpc-opendata bus real-time 307
+
+# 查詢公車業者資訊
+ntpc-opendata bus operators
+
+# 查詢公車轉乘優惠
+ntpc-opendata bus transfer-discounts
+
+# 查詢路線說明
+ntpc-opendata bus route-info --type "快速公車" 307
+```
+
+#### 自行車查詢
+```bash
+# 查看自行車相關指令
+ntpc-opendata bike --help
 
 # 查詢 YouBike 站點
 ntpc-opendata bike youbike --area "板橋區"
 
-# 查詢停車場
+# 查詢有可借車輛的站點
+ntpc-opendata bike available-bikes --min-bikes 5
+
+# 查詢附近的 YouBike
+ntpc-opendata bike nearby-youbike 25.0132 121.4670 --radius 500
+
+# 查詢自行車架
+ntpc-opendata bike bike-racks --area "板橋區" --near-mrt
+
+# 查詢自行車道
+ntpc-opendata bike bike-lanes
+```
+
+#### 停車場查詢
+```bash
+# 查看停車場相關指令
+ntpc-opendata parking --help
+
+# 查詢停車場列表
 ntpc-opendata parking list --area "板橋區"
+
+# 查詢停車場詳細資訊
+ntpc-opendata parking info P-TY-0001
+
+# 查詢有空位的停車場
+ntpc-opendata parking available --min-spaces 5 --area "板橋區"
+
+# 查詢停車費率
+ntpc-opendata parking fee-rates
+
+# 查詢附近停車場
+ntpc-opendata parking nearby 25.0132 121.4670 --radius 500
+
+# 查詢即時狀態
+ntpc-opendata parking status
+```
+
+#### 交通狀況查詢
+```bash
+# 查看交通狀況相關指令
+ntpc-opendata traffic --help
+
+# 查詢即時交通狀況
+ntpc-opendata traffic status --area "板橋區"
+
+# 查詢道路施工資訊
+ntpc-opendata traffic construction --area "板橋區"
+
+# 查詢交通攝影機
+ntpc-opendata traffic cameras --area "板橋區"
+
+# 查詢交通事件
+ntpc-opendata traffic incidents --area "板橋區" --type "事故"
+```
+
+#### 其他交通服務查詢
+```bash
+# 查看其他交通服務相關指令
+ntpc-opendata misc-traffic --help
+
+# 查詢計程車服務
+ntpc-opendata misc-traffic taxi-services
+
+# 搜尋計程車服務
+ntpc-opendata misc-traffic search-taxi "大都會"
+
+# 查詢拖吊保管場
+ntpc-opendata misc-traffic towing-storage
+
+# 查詢最近的拖吊保管場
+ntpc-opendata misc-traffic nearest-towing 25.0132 121.4670
+
+# 查詢交通影響評估
+ntpc-opendata misc-traffic impact-assessment
 ```
 
 ### 作為 MCP 服務使用
 
-在 Claude 中，可以直接調用此 MCP 服務：
+在 Claude 中，可以直接調用此 MCP 服務，例如：
 
 ```
+# 查詢公車路線
 我想查詢新北市307公車的路線資訊。
+
+# 查詢站點公車
+請問捷運板橋站有哪些公車？
+
+# 查詢 YouBike
+板橋區有哪些 YouBike 站點？
+
+# 查詢停車場
+請問板橋區有哪些停車場還有空位？
+
+# 查詢交通狀況
+板橋區目前的交通狀況如何？
+
+# 查詢施工資訊
+板橋區最近有哪些道路在施工？
 ```
 
 ## API 模組資源
